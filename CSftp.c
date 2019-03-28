@@ -11,31 +11,50 @@
 // one how to get the arguments passed on the command line.
 
 int main(int argc, char *argv[]) {
-    // Check the command line arguments
+    struct sockaddr_in address;
+    int port_num, socket_fd, new_socket_fd;
+    int opt = 1;
+    // check the command line arguments
     if (argc != 2) {
       usage(argv[0]);
       return -1;
     }
 
     // get port number from argument passed in 
-    int port_num = atoi(argv[1]);
+    port_num = atoi(argv[1]);
     // check if port number is valid
-    if (port_num == 0) {
+    if (port_num < 1024 || port_num > 65535) {
       printf("Invalid port number.\n");
       return -1;
     }
-    printf("Port number: %d\n", port_num);
 
-    struct addrinfo;
     // create a socket
-    int socket_descriptor = socket(AF_INET, SOCK_STREAM, 0);
-    if (socket_descriptor == -1) {
-      printf("Socket failed to be created.\n");
+    socket_fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (socket_fd == -1) {
+      printf("Socket creation failed.\n");
       return -1;
     }
-    printf("Socket fd: %d\n", socket_descriptor);
 
+    address.sin_family = AF_INET;
+    address.sin_addr.s_addr = INADDR_ANY;
+    address.sin_port = htons(port_num);
 
+    int address_len = sizeof(address);
+
+    if (bind(socket_fd, (struct sockaddr *)&address, sizeof(address)) == -1) {
+      printf("Failed to bind socket.\n");
+      return -1;
+    }
+
+    if (listen(socket_fd, 1) == -1) {
+      printf("Failed to listen to socket.\n");
+      return -1;
+    }
+
+    if ((new_socket_fd = accept(socket_fd, (struct sockaddr *)&address, (socklen_t*)&address_len)) == -1) {
+      printf("Failed to accept.\n");
+      return -1;
+    }
 
     // This is how to call the function in dir.c to get a listing of a directory.
     // It requires a file descriptor, so in your code you would pass in the file descriptor 
