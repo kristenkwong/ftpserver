@@ -5,6 +5,7 @@
 #include <netinet/in.h>
 #include <unistd.h>
 #include <netdb.h>
+#include <string.h> 
 #include "dir.h"
 #include "usage.h"
 
@@ -59,17 +60,25 @@ int main(int argc, char *argv[])
     return -1;
   }
 
-  // while (1)
-  // {
-    if ((new_socket_fd = accept(socket_fd, (struct sockaddr *)&address, (socklen_t *)&address_len)) == -1)
-    {
-      printf("Failed to accept.\n");
-      return -1;
+  if ((new_socket_fd = accept(socket_fd, (struct sockaddr *)&address, (socklen_t *)&address_len)) == -1)
+  {
+    printf("Failed to accept.\n");
+    return -1;
+  }
+
+  send(new_socket_fd, "220 Service ready for new user.\r\n", strlen("220 Service ready for new user.\r\n"), 0);
+  while (1)
+  {
+    int data_len = recv(new_socket_fd, buffer, 1024, 0);
+    // printf("%s\n", buffer);
+    char *token;
+    char s[2] = " ";
+    token = strtok(buffer, s);
+    while (token != NULL) {
+      printf(" %s\n", token);
+      token = strtok(NULL, s);
     }
-    int valread = read(new_socket_fd, buffer, 1024);
-    printf("%s\n", buffer);
-    printf("loop\n");
-  // }
+  }
 
   // This is how to call the function in dir.c to get a listing of a directory.
   // It requires a file descriptor, so in your code you would pass in the file descriptor
