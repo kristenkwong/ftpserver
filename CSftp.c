@@ -5,18 +5,33 @@
 #include <netinet/in.h>
 #include <unistd.h>
 #include <netdb.h>
-#include <string.h> 
+#include <string.h>
 #include "dir.h"
 #include "usage.h"
 
 // Here is an example of how to use the above function. It also shows
 // one how to get the arguments passed on the command line.
 
+void not_logged_in_response(int fd) {
+  send(fd, "530 Not logged in.\r\n", strlen("530 Not logged in.\r\n"), 0);
+}
+
+void syntax_error_response(int fd) {
+  send(fd, "500 Syntax error, command unrecognized.\r\n",
+           strlen("500 Syntax error, command unrecognized.\r\n"), 0);
+}
+
+void syntax_error_args_response(int fd) {
+  send(fd, "501 Syntax error in parameters or arguments.\r\n", strlen("501 Syntax error in parameters or arguments.\r\n"), 0);
+}
+
 int main(int argc, char *argv[])
 {
   struct sockaddr_in address;
   int port_num, socket_fd, new_socket_fd;
   int opt = 1;
+  // user isn't logged in initially
+  int logged_in = 0;
   char buffer[1024] = {0};
   // check the command line arguments
   if (argc != 2)
@@ -66,17 +81,92 @@ int main(int argc, char *argv[])
     return -1;
   }
 
+  // send welcome message to client
   send(new_socket_fd, "220 Service ready for new user.\r\n", strlen("220 Service ready for new user.\r\n"), 0);
   while (1)
   {
+    // TODO: finish the user sequence.
+    // plan: make an int to determine if user is already logged in or not
+    // check for USER command (need to split strings)
+    // check for argument counts and that it's cs317
+    // if not logged in, reject other commands
     int data_len = recv(new_socket_fd, buffer, 1024, 0);
-    // printf("%s\n", buffer);
-    char *token;
-    char s[2] = " ";
-    token = strtok(buffer, s);
-    while (token != NULL) {
-      printf(" %s\n", token);
-      token = strtok(NULL, s);
+    if (data_len <= 0)
+    {
+      break;
+    }
+    else if (data_len > 1024)
+    // overflow detection
+    {
+      syntax_error_response(new_socket_fd);
+      continue;
+    }
+    char *command;
+    char delimit[] = " \t\r\n\v\f";
+
+    // first string
+    command = strtok(buffer, delimit);
+
+    // loop through all the tokens
+    // while (token != NULL)
+    // {
+    //   printf(" %s\n", token);
+    //   token = strtok(NULL, s);
+    // }
+
+    printf("%s\n", command);
+
+    // START PROCESSING COMMANDS FROM THE USER
+    if (logged_in == 0 && strcasecmp(command, "user") != 0)
+    {
+      // user is not logged in - don't process commands
+      not_logged_in_response(new_socket_fd);
+      continue;
+    }
+    else
+    {
+      if (strcasecmp(command, "user") == 0)
+      {
+        if (command != NULL)
+        {
+          // get the second argument
+          command = strtok(NULL, delimit);
+          printf("the second arg: %s\n", command);
+          if (command == NULL) {
+            // if you enter user and there's no other arguments (NULL)
+            syntax_error_args_response(new_socket_fd);
+            continue;
+          }
+        }
+        if (strcasecmp(command, "cs317") == 0)
+        {
+          logged_in = 1;
+          send(new_socket_fd, "230 User logged in, proceed.\r\n", strlen("230 User logged in, proceed.\r\n"), 0);
+        }
+      }
+      else if (strcasecmp(command, "quit") == 0) {
+
+      } else if (strcasecmp(command, "cwd") == 0) {
+        
+      } else if (strcasecmp(command, "cdup") == 0) {
+
+      } else if (strcasecmp(command, "type") == 0) {
+
+      } else if (strcasecmp(command, "mode") == 0) {
+
+      } else if (strcasecmp(command, "stru") == 0) {
+
+      } else if (strcasecmp(command, "retr") == 0) {
+
+      } else if (strcasecmp(command, "pasv") == 0) {
+
+      } else if (strcasecmp(command, "nlst") == 0) {
+
+      } else {
+        // command isn't one of the ones supported
+        syntax_error_response(new_socket_fd);
+      }
+      continue;
     }
   }
 
