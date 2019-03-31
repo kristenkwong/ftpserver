@@ -1,5 +1,6 @@
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <netinet/in.h>
@@ -26,6 +27,14 @@ void syntax_error_response(int fd)
 void syntax_error_args_response(int fd)
 {
   send(fd, "501 Syntax error in parameters or arguments.\r\n", strlen("501 Syntax error in parameters or arguments.\r\n"), 0);
+}
+
+void command_okay_response(int fd) {
+  send(fd, "200 Command okay.\r\n", strlen("200 Command okay.\r\n"), 0);
+}
+
+void parameter_not_supported_response(int fd) {
+  send(fd, "504 Command not implemented for that parameter.\r\n", strlen("504 Command not implemented for that parameter.\r\n"), 0);
 }
 
 int main(int argc, char *argv[])
@@ -92,7 +101,7 @@ int main(int argc, char *argv[])
     printf("Data length: %d\n", data_len);
     if (data_len <= 0)
     {
-      continue;
+      break;
     }
     else if (data_len > 1024)
     // overflow detection
@@ -101,20 +110,35 @@ int main(int argc, char *argv[])
       continue;
     }
     char *command;
+    char *token;
+    char *first_arg;
+    char *second_arg;
+    int arg_count = 0;
     char delimit[] = " \t\r\n\v\f";
 
     // first string
     // TODO: null check if there's an empty line recevied from the client
+    // token = strtok(buffer, delimit);
+    // command = token;
     command = strtok(buffer, delimit);
 
     // loop through all the tokens
     // while (token != NULL)
-    // {
-    //   printf(" %s\n", token);
-    //   token = strtok(NULL, s);
+    // { 
+    //   arg_count++;
+    //   token = strtok(NULL, delimit);
+    //   if (arg_count == 1) {
+    //     first_arg = token;
+    //   } else if (arg_count == 2) {
+    //     second_arg = token;
+    //   }
     // }
 
-    printf("The first command: %s\n", command);
+    // printf("The first command: %s\n", command);
+    // printf("The first arg: %s\n", first_arg);
+    // printf("The second arg: %s\n", second_arg);
+    // printf("The number of args passed is: %d\n", arg_count);
+
     // TODO: should probably implement a more robust way of checking for arg count
     // START PROCESSING COMMANDS FROM THE USER
     if (logged_in == 0 && strcasecmp(command, "user") != 0)
@@ -127,20 +151,20 @@ int main(int argc, char *argv[])
     {
       if (strcasecmp(command, "user") == 0)
       {
-        char *second_arg;
+        char *user_arg;
         if (command != NULL)
         {
           // get the second argument
-          second_arg = strtok(NULL, delimit);
-          printf("The second arg: %s\n", second_arg);
-          if (second_arg == NULL)
+          user_arg = strtok(NULL, delimit);
+          printf("The second arg: %s\n", user_arg);
+          if (user_arg == NULL)
           {
             // if you enter user and there's no other arguments (NULL) 
             syntax_error_args_response(new_socket_fd);
             continue;
           }
         }
-        if (strcasecmp(second_arg, "cs317") == 0)
+        if (strcasecmp(user_arg, "cs317") == 0)
         {
           printf("%s\n", "Login was successful. Setting logged_in = 1");
           logged_in = 1;
@@ -153,6 +177,7 @@ int main(int argc, char *argv[])
         }
       }
       else if (strcasecmp(command, "quit") == 0)
+      // TODO: I think you can call this command even if you're not logged in... need to check
       {
         logged_in = 0;
         send(new_socket_fd, "221 Service closing control connection.\r\n", 
@@ -169,6 +194,30 @@ int main(int argc, char *argv[])
       }
       else if (strcasecmp(command, "type") == 0)
       {
+        printf("%s\n", "Type command:");
+        char *type_arg;
+        if (command != NULL)
+        {
+          // get the second argument
+          type_arg = strtok(NULL, delimit);
+          printf("The second arg: %s\n", type_arg);
+          if (type_arg == NULL)
+          {
+            // if you enter user and there's no other arguments (NULL) 
+            syntax_error_args_response(new_socket_fd);
+            continue;
+          }
+          char type = toupper(*type_arg);
+          if (type == 'A'|| type == 'I') {
+            command_okay_response(new_socket_fd);
+            type_arg = NULL;
+            continue;
+          } else  {
+            parameter_not_supported_response(new_socket_fd);
+            type_arg = NULL;
+            continue;
+          }
+        } 
       }
       else if (strcasecmp(command, "mode") == 0)
       {
