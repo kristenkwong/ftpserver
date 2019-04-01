@@ -36,6 +36,11 @@ void parameter_not_supported_response(int fd) {
        strlen("504 Command not implemented for that parameter.\r\n"), 0);
 }
 
+void file_action_okay_response(int fd) {
+  send(fd, "250 Requested file action okay, completed.\r\n",
+       strlen("250 Requested file action okay, completed.\r\n"), 0);
+}
+
 int main(int argc, char *argv[]) {
   struct sockaddr_in address;
   int port_num, socket_fd, new_socket_fd;
@@ -165,6 +170,14 @@ int main(int argc, char *argv[]) {
           continue;
         }
       } else if (strcasecmp(command, "cwd") == 0) {
+        if (arg_count != 2) {
+          // if there's no file path provided, send a syntax error response
+          syntax_error_args_response(new_socket_fd);
+          continue;
+        } 
+        // TODO: check if the file path starts with ./ or ../ or contains ../, if so return 501
+        // TODO: if file path is valid, chdir() and return 250 response
+        continue;
       } else if (strcasecmp(command, "cdup") == 0) {
       } else if (strcasecmp(command, "type") == 0) {
         if (arg_count != 2) {
