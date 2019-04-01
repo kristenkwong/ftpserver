@@ -41,6 +41,11 @@ void file_action_okay_response(int fd) {
        strlen("250 Requested file action okay, completed.\r\n"), 0);
 }
 
+void requested_action_not_taken_response(int fd) {
+  send(fd, "550 Requested action not taken.\r\n",
+       strlen("550 Requested action not taken.\r\n"), 0);
+}
+
 int main(int argc, char *argv[]) {
   struct sockaddr_in address;
   int port_num, socket_fd, new_socket_fd;
@@ -98,7 +103,6 @@ int main(int argc, char *argv[]) {
     // clears the buffer
     memset(buffer, '\0', 1024);
     int data_len = recv(new_socket_fd, buffer, 1024, 0);
-    printf("Data length: %d\n", data_len);
     if (data_len <= 0) {
       break;
     } else if (data_len > 1024)
@@ -114,22 +118,18 @@ int main(int argc, char *argv[]) {
 
     // first string
     token = strtok(buffer, delimit);
-    char *args[4];
+    char *args[2];
 
-    while (token != NULL && arg_count <= 3) {
+    while (token != NULL && arg_count <= 1) {
       args[arg_count++] = token;
       token = strtok(NULL, delimit);
     }
 
     char *command = args[0];
     char *first_arg = args[1];
-    char *second_arg = args[2];
-    char *third_arg = args[3];
 
     printf("The first command: %s\n", command);
     printf("The first arg: %s\n", first_arg);
-    printf("The second arg: %s\n", second_arg);
-    printf("The third arg: %s\n", third_arg);
     printf("The number of args passed is: %d\n", arg_count);
 
     // START PROCESSING COMMANDS FROM THE USER
@@ -174,8 +174,33 @@ int main(int argc, char *argv[]) {
           // if there's no file path provided, send a syntax error response
           syntax_error_args_response(new_socket_fd);
           continue;
-        } 
-        // TODO: check if the file path starts with ./ or ../ or contains ../, if so return 501
+        }
+
+        char *path_token;
+        char *file_path;
+        file_path = strdup(first_arg);
+
+        char slash[1] = "/";
+        path_token = strtok(first_arg, slash);
+        while (path_token != NULL) {
+          // return 550 response if file path contains ./ or ../
+          if (strcmp(path_token, ".") == 0 || strcmp(path_token, "..") == 0) {
+            requested_action_not_taken_response(new_socket_fd);
+            break;
+          }
+          path_token = strtok(NULL, slash);
+        }
+
+        if (chdir(file_path) == -1) {
+          requested_action_not_taken_response(new_socket_fd);
+          free(file_path);
+          continue;
+        } else {
+          file_action_okay_response(new_socket_fd);
+          free(file_path);
+          continue;
+        }
+        // TODO: check if the file path contains ./ or ../, return 550 response
         // TODO: if file path is valid, chdir() and return 250 response
         continue;
       } else if (strcasecmp(command, "cdup") == 0) {
