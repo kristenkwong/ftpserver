@@ -140,7 +140,7 @@ int main(int argc, char *argv[])
     printf("The number of args passed is: %d\n", arg_count);
 
     // START PROCESSING COMMANDS FROM THE USER
-    // quit command
+    // QUIT command
     if (strcasecmp(command, "quit") == 0)
     {
       if (arg_count != 1)
@@ -164,6 +164,7 @@ int main(int argc, char *argv[])
     }
     else
     {
+      // USER command
       if (strcasecmp(command, "user") == 0)
       {
         if (arg_count != 2)
@@ -211,6 +212,7 @@ int main(int argc, char *argv[])
           continue;
         }
       }
+      // MODE command
       else if (strcasecmp(command, "mode") == 0)
       {
         if (arg_count != 2)
@@ -232,15 +234,37 @@ int main(int argc, char *argv[])
           continue;
         }
       }
+      // STRU command
       else if (strcasecmp(command, "stru") == 0)
       {
+        if (arg_count != 2)
+        {
+          // if there's only the 'stru' argument
+          syntax_error_args_response(new_socket_fd);
+          continue;
+        }
+        char stru = toupper(*first_arg);
+        if (stru == 'F')
+        // only File structure type needs to be supported
+        {
+          command_okay_response(new_socket_fd);
+          continue;
+        }
+        else
+        {
+          parameter_not_supported_response(new_socket_fd);
+          continue;
+        }
       }
+      // RETR command
       else if (strcasecmp(command, "retr") == 0)
       {
       }
+      // PASV command
       else if (strcasecmp(command, "pasv") == 0)
       {
       }
+      // NLST command
       else if (strcasecmp(command, "nlst") == 0)
       {
       }
