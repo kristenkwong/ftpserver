@@ -29,11 +29,13 @@ void syntax_error_args_response(int fd)
   send(fd, "501 Syntax error in parameters or arguments.\r\n", strlen("501 Syntax error in parameters or arguments.\r\n"), 0);
 }
 
-void command_okay_response(int fd) {
+void command_okay_response(int fd)
+{
   send(fd, "200 Command okay.\r\n", strlen("200 Command okay.\r\n"), 0);
 }
 
-void parameter_not_supported_response(int fd) {
+void parameter_not_supported_response(int fd)
+{
   send(fd, "504 Command not implemented for that parameter.\r\n", strlen("504 Command not implemented for that parameter.\r\n"), 0);
 }
 
@@ -97,6 +99,8 @@ int main(int argc, char *argv[])
   send(new_socket_fd, "220 Service ready for new user.\r\n", strlen("220 Service ready for new user.\r\n"), 0);
   while (1)
   {
+    // clears the buffer
+    memset(buffer, '\0', 1024);
     int data_len = recv(new_socket_fd, buffer, 1024, 0);
     printf("Data length: %d\n", data_len);
     if (data_len <= 0)
@@ -109,41 +113,52 @@ int main(int argc, char *argv[])
       syntax_error_response(new_socket_fd);
       continue;
     }
-    char *command;
+
     char *token;
-    char *first_arg;
-    char *second_arg;
     int arg_count = 0;
     char delimit[] = " \t\r\n\v\f";
 
     // first string
-    // TODO: null check if there's an empty line recevied from the client
-    // token = strtok(buffer, delimit);
-    // command = token;
-    command = strtok(buffer, delimit);
+    token = strtok(buffer, delimit);
+    char *args[4];
 
-    // loop through all the tokens
-    // while (token != NULL)
-    // { 
-    //   arg_count++;
-    //   token = strtok(NULL, delimit);
-    //   if (arg_count == 1) {
-    //     first_arg = token;
-    //   } else if (arg_count == 2) {
-    //     second_arg = token;
-    //   }
-    // }
+    while (token != NULL && arg_count <= 3)
+    {
+      args[arg_count++] = token;
+      token = strtok(NULL, delimit);
+    }
 
-    // printf("The first command: %s\n", command);
-    // printf("The first arg: %s\n", first_arg);
-    // printf("The second arg: %s\n", second_arg);
-    // printf("The number of args passed is: %d\n", arg_count);
+    char *command = args[0];
+    char *first_arg = args[1];
+    char *second_arg = args[2];
+    char *third_arg = args[3];
 
-    // TODO: should probably implement a more robust way of checking for arg count
+    printf("The first command: %s\n", command);
+    printf("The first arg: %s\n", first_arg);
+    printf("The second arg: %s\n", second_arg);
+    printf("The third arg: %s\n", third_arg);
+    printf("The number of args passed is: %d\n", arg_count);
+
     // START PROCESSING COMMANDS FROM THE USER
+    // quit command
+    if (strcasecmp(command, "quit") == 0)
+    {
+      if (arg_count != 1)
+      {
+        syntax_error_args_response(new_socket_fd);
+        continue;
+      }
+      logged_in = 0;
+      send(new_socket_fd, "221 Service closing control connection.\r\n",
+           strlen("221 Service closing control connection.\r\n"), 0);
+      close(new_socket_fd);
+      // TODO: NOT SURE IF I NEED TO RETURN A 0 HERE TO END THE PROGRAM
+      return 0;
+    }
+
     if (logged_in == 0 && strcasecmp(command, "user") != 0)
     {
-      // user is not logged in - don't process commands
+      // user is not logged in - send not logged in response
       not_logged_in_response(new_socket_fd);
       continue;
     }
@@ -151,20 +166,13 @@ int main(int argc, char *argv[])
     {
       if (strcasecmp(command, "user") == 0)
       {
-        char *user_arg;
-        if (command != NULL)
+        if (arg_count != 2)
         {
-          // get the second argument
-          user_arg = strtok(NULL, delimit);
-          printf("The second arg: %s\n", user_arg);
-          if (user_arg == NULL)
-          {
-            // if you enter user and there's no other arguments (NULL) 
-            syntax_error_args_response(new_socket_fd);
-            continue;
-          }
+          // if there's only 'user' and no username argument
+          syntax_error_args_response(new_socket_fd);
+          continue;
         }
-        if (strcasecmp(user_arg, "cs317") == 0)
+        if (strcasecmp(first_arg, "cs317") == 0)
         {
           printf("%s\n", "Login was successful. Setting logged_in = 1");
           logged_in = 1;
@@ -172,19 +180,10 @@ int main(int argc, char *argv[])
         }
         else
         {
+          // if any other username is entered
           not_logged_in_response(new_socket_fd);
           continue;
         }
-      }
-      else if (strcasecmp(command, "quit") == 0)
-      // TODO: I think you can call this command even if you're not logged in... need to check
-      {
-        logged_in = 0;
-        send(new_socket_fd, "221 Service closing control connection.\r\n", 
-                strlen("221 Service closing control connection.\r\n"), 0);
-        close(new_socket_fd);
-        // TODO: NOT SURE IF I NEED TO RETURN A 0 HERE TO END THE PROGRAM
-        return 0;
       }
       else if (strcasecmp(command, "cwd") == 0)
       {
@@ -194,54 +193,44 @@ int main(int argc, char *argv[])
       }
       else if (strcasecmp(command, "type") == 0)
       {
-        printf("%s\n", "-- Type command --");
-        char *type_arg;
-        if (command != NULL)
+        if (arg_count != 2)
         {
-          // get the second argument
-          type_arg = strtok(NULL, delimit);
-          printf("The second arg: %s\n", type_arg);
-          if (type_arg == NULL)
-          {
-            // if you enter user and there's no other arguments (NULL) 
-            syntax_error_args_response(new_socket_fd);
-            continue;
-          }
-          char type = toupper(*type_arg);
-          if (type == 'A'|| type == 'I') {
-            command_okay_response(new_socket_fd);
-            continue;
-          } else  {
-            parameter_not_supported_response(new_socket_fd);
-            continue;
-          }
-        } 
+          // if there's only the 'type' argument
+          syntax_error_args_response(new_socket_fd);
+          continue;
+        }
+        char type = toupper(*first_arg);
+        if (type == 'A' || type == 'I')
+        {
+          command_okay_response(new_socket_fd);
+          continue;
+        }
+        else
+        {
+          parameter_not_supported_response(new_socket_fd);
+          continue;
+        }
       }
       else if (strcasecmp(command, "mode") == 0)
       {
-        printf("%s\n", "Mode command:");
-        char *mode_arg;
-        if (command != NULL)
+        if (arg_count != 2)
         {
-          // get the second argument
-          mode_arg = strtok(NULL, delimit);
-          printf("The second arg: %s\n", mode_arg);
-          if (mode_arg == NULL)
-          {
-            // if you enter user and there's no other arguments (NULL) 
-            syntax_error_args_response(new_socket_fd);
-            continue;
-          }
-          char type = toupper(*mode_arg);
-          // only supports STREAM mode
-          if (type == 'S') {
-            command_okay_response(new_socket_fd);
-            continue;
-          } else  {
-            parameter_not_supported_response(new_socket_fd);
-            continue;
-          }
-        } 
+          // if there's only the 'mode' argument
+          syntax_error_args_response(new_socket_fd);
+          continue;
+        }
+        char mode = toupper(*first_arg);
+        if (mode == 'S')
+        // only stream mode needs to be supported
+        {
+          command_okay_response(new_socket_fd);
+          continue;
+        }
+        else
+        {
+          parameter_not_supported_response(new_socket_fd);
+          continue;
+        }
       }
       else if (strcasecmp(command, "stru") == 0)
       {
