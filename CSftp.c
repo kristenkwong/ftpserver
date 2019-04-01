@@ -194,7 +194,7 @@ int main(int argc, char *argv[])
       }
       else if (strcasecmp(command, "type") == 0)
       {
-        printf("%s\n", "Type command:");
+        printf("%s\n", "-- Type command --");
         char *type_arg;
         if (command != NULL)
         {
@@ -210,17 +210,38 @@ int main(int argc, char *argv[])
           char type = toupper(*type_arg);
           if (type == 'A'|| type == 'I') {
             command_okay_response(new_socket_fd);
-            type_arg = NULL;
             continue;
           } else  {
             parameter_not_supported_response(new_socket_fd);
-            type_arg = NULL;
             continue;
           }
         } 
       }
       else if (strcasecmp(command, "mode") == 0)
       {
+        printf("%s\n", "Mode command:");
+        char *mode_arg;
+        if (command != NULL)
+        {
+          // get the second argument
+          mode_arg = strtok(NULL, delimit);
+          printf("The second arg: %s\n", mode_arg);
+          if (mode_arg == NULL)
+          {
+            // if you enter user and there's no other arguments (NULL) 
+            syntax_error_args_response(new_socket_fd);
+            continue;
+          }
+          char type = toupper(*mode_arg);
+          // only supports STREAM mode
+          if (type == 'S') {
+            command_okay_response(new_socket_fd);
+            continue;
+          } else  {
+            parameter_not_supported_response(new_socket_fd);
+            continue;
+          }
+        } 
       }
       else if (strcasecmp(command, "stru") == 0)
       {
