@@ -48,6 +48,8 @@ void requested_action_not_taken_response(int fd) {
 
 int main(int argc, char *argv[]) {
   struct sockaddr_in address;
+  // store the root directory
+  char* root_dir = getcwd(root_dir, sizeof(root_dir));
   int port_num, socket_fd, new_socket_fd;
   int opt = 1;
   // user isn't logged in initially
@@ -186,24 +188,37 @@ int main(int argc, char *argv[]) {
           // return 550 response if file path contains ./ or ../
           if (strcmp(path_token, ".") == 0 || strcmp(path_token, "..") == 0) {
             requested_action_not_taken_response(new_socket_fd);
-            break;
+            goto next;
           }
           path_token = strtok(NULL, slash);
         }
 
         if (chdir(file_path) == -1) {
+          // requested action could not be taken (invalid file path, dir doesn't exist)
           requested_action_not_taken_response(new_socket_fd);
           free(file_path);
           continue;
         } else {
+          // requested action is okay - moved directories
           file_action_okay_response(new_socket_fd);
           free(file_path);
           continue;
         }
-        // TODO: check if the file path contains ./ or ../, return 550 response
-        // TODO: if file path is valid, chdir() and return 250 response
+        next:
         continue;
       } else if (strcasecmp(command, "cdup") == 0) {
+        // cdup command
+        if (arg_count != 1) {
+          // cdup should have no arguments
+          syntax_error_args_response(new_socket_fd);
+          continue;
+        }
+
+        char *curr_dir = getcwd(curr_dir, sizeof(curr_dir));
+        if (strcmp(curr_dir, root_dir) == 0) {
+          // cannot call CDUP if its already in the parent directory
+        }
+
       } else if (strcasecmp(command, "type") == 0) {
         if (arg_count != 2) {
           // if there's only the 'type' argument
