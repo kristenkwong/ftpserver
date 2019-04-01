@@ -50,6 +50,7 @@ int main(int argc, char *argv[]) {
   struct sockaddr_in address;
   // store the root directory
   char* root_dir = getcwd(root_dir, sizeof(root_dir));
+  printf("Root directory is: %s\n", root_dir);
   int port_num, socket_fd, new_socket_fd;
   int opt = 1;
   // user isn't logged in initially
@@ -214,10 +215,22 @@ int main(int argc, char *argv[]) {
           continue;
         }
 
-        char *curr_dir = getcwd(curr_dir, sizeof(curr_dir));
+        char curr_dir[256];
+        getcwd(curr_dir, 256); 
         if (strcmp(curr_dir, root_dir) == 0) {
-          // cannot call CDUP if its already in the parent directory
-        }
+          // send error response if CDUP is called in the root directory
+          requested_action_not_taken_response(new_socket_fd);
+          continue;
+        } 
+
+        if (chdir("..") == 0) {
+          getcwd(curr_dir, 256); 
+          command_okay_response(new_socket_fd);
+          continue;
+        } else {
+          requested_action_not_taken_response(new_socket_fd);
+          continue;
+        };
 
       } else if (strcasecmp(command, "type") == 0) {
         if (arg_count != 2) {
