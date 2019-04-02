@@ -46,6 +46,10 @@ void requested_action_not_taken_response(int fd) {
        strlen("550 Requested action not taken.\r\n"), 0);
 }
 
+void cant_open_data_connection_response(int fd) {
+  send(fd, "425 Can't open data connection.\r\n", strlen("425 Can't open data connection.\r\n"), 0);
+}
+
 int main(int argc, char *argv[]) {
   struct sockaddr_in address;
   // store the root directory
@@ -53,9 +57,13 @@ int main(int argc, char *argv[]) {
   getcwd(root_dir, sizeof(root_dir));
   printf("Root directory is: %s\n", root_dir);
   int port_num, socket_fd, new_socket_fd;
-  int opt = 1;
+
   // user isn't logged in initially
   int logged_in = 0;
+
+  // not in passive mode initially
+  int passive_mode = 0;
+
   char buffer[1024] = {0};
   // check the command line arguments
   if (argc != 2) {
@@ -293,12 +301,33 @@ int main(int argc, char *argv[]) {
       }
       // RETR command
       else if (strcasecmp(command, "retr") == 0) {
+        if (passive_mode == 0) {
+          cant_open_data_connection_response(new_socket_fd);
+          continue;
+        }
+        // TODO: complete
       }
       // PASV command
       else if (strcasecmp(command, "pasv") == 0) {
+        // TODO: generate IP address and port number for passive mode
+        // send '227 Entering Passive Mode (h1,h2,h3,h4,p1,p2).' response to the client
+        struct addrinfo hints, *res;
+        int sockfd;
+
+        memset(&hints, 0, sizeof hints); // make sure the struct is empty
+        hints.ai_family = AF_INET; // IPv4 address
+        hints.ai_socktype = SOCK_STREAM; // TCP stream sockets
+        hints.ai_flags = AI_PASSIVE; // fills in IP for me
+
+        
       }
       // NLST command
       else if (strcasecmp(command, "nlst") == 0) {
+        if (passive_mode == 0) {
+          cant_open_data_connection_response(new_socket_fd);
+          continue;
+        }
+        // TODO: complete
       } else {
         // command isn't one of the ones supported
         syntax_error_response(new_socket_fd);
