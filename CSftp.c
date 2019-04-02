@@ -49,7 +49,8 @@ void requested_action_not_taken_response(int fd) {
 int main(int argc, char *argv[]) {
   struct sockaddr_in address;
   // store the root directory
-  char* root_dir = getcwd(root_dir, sizeof(root_dir));
+  char root_dir[256];
+  getcwd(root_dir, sizeof(root_dir));
   printf("Root directory is: %s\n", root_dir);
   int port_num, socket_fd, new_socket_fd;
   int opt = 1;
@@ -178,6 +179,9 @@ int main(int argc, char *argv[]) {
           syntax_error_args_response(new_socket_fd);
           continue;
         }
+        char curr_dir[256];
+        getcwd(curr_dir, 256); 
+        printf("The current directory is: %s\n", curr_dir);
 
         char *path_token;
         char *file_path;
@@ -201,6 +205,8 @@ int main(int argc, char *argv[]) {
           continue;
         } else {
           // requested action is okay - moved directories
+          getcwd(curr_dir, 256); 
+          printf("The current directory now is: %s\n", curr_dir);
           file_action_okay_response(new_socket_fd);
           free(file_path);
           continue;
@@ -217,6 +223,7 @@ int main(int argc, char *argv[]) {
 
         char curr_dir[256];
         getcwd(curr_dir, 256); 
+        printf("The current directory is: %s\n", curr_dir);
         if (strcmp(curr_dir, root_dir) == 0) {
           // send error response if CDUP is called in the root directory
           requested_action_not_taken_response(new_socket_fd);
@@ -225,6 +232,7 @@ int main(int argc, char *argv[]) {
 
         if (chdir("..") == 0) {
           getcwd(curr_dir, 256); 
+          printf("The current directory after is: %s\n", curr_dir);
           command_okay_response(new_socket_fd);
           continue;
         } else {
