@@ -553,6 +553,7 @@ int main(int argc, char *argv[]) {
         struct sockaddr_in pasv_addr;
         socklen_t pasv_addr_size = sizeof pasv_addr;
         getsockname(pasv_fd, (struct sockaddr *)&pasv_addr, &pasv_addr_size);
+        printf("listening on: %d\n", pasv_fd);
 
         // convert to the correct byte order
         pasv_port_num = (int)ntohs(pasv_addr.sin_port);
@@ -578,8 +579,12 @@ int main(int argc, char *argv[]) {
         } else if (arg_count > 1) { // param given
           syntax_error_args_response(new_socket_fd);
         } else {
+          socklen_t sin_size;
+          sin_size = sizeof(client_addr);
           new_pasv_fd = accept(pasv_fd, (struct sockaddr *)&client_addr,
-                               (socklen_t *)sizeof(client_addr));
+                               &sin_size);
+          
+          printf("help: %d\n", new_pasv_fd);
 
           file_status_okay_response(new_socket_fd);
           int files = listFiles(new_pasv_fd, ".");
