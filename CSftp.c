@@ -1,5 +1,6 @@
 #include "dir.h"
 #include "usage.h"
+#include <arpa/inet.h>
 #include <ctype.h>
 #include <netdb.h>
 #include <netinet/in.h>
@@ -56,10 +57,20 @@ void service_not_available_response(int fd) {
        strlen("421 Service not available, closing control connection.\r\n"), 0);
 }
 
+// source: https://stackoverflow.com/questions/26951184/using-a-replace-function-in-c-programming
+// function to replace periods with commas
+int replace_periods(char *input) {
+    for (char *p = input; *p; p++) {
+        if (*p == '.') *p = ',';
+    }
+    return 1; 
+}
+
 int main(int argc, char *argv[]) {
   struct sockaddr_in address;
   // store the root directory
   char root_dir[256];
+  char *sock_ip_address;
   getcwd(root_dir, sizeof(root_dir));
   printf("Root directory is: %s\n", root_dir);
   int port_num, socket_fd, new_socket_fd;
@@ -113,6 +124,17 @@ int main(int argc, char *argv[]) {
     printf("Failed to accept.\n");
     return -1;
   }
+
+  struct sockaddr_in sock_addr;
+  socklen_t sock_addr_size = sizeof sock_addr;
+  getsockname(new_socket_fd, (struct sockaddr *)&sock_addr, &sock_addr_size);
+  sock_ip_address = inet_ntoa(sock_addr.sin_addr);
+  printf("IPv4 Address: %s\n", sock_ip_address);
+
+  // duplicate the IP address string, for use in PASV command
+  char *dup_ip_address = strdup(sock_ip_address);
+  replace_periods
+(dup_ip_address);
 
   // send welcome message to client
   send(new_socket_fd, "220 Service ready for new user.\r\n",
@@ -221,7 +243,6 @@ int main(int argc, char *argv[]) {
         } else {
           // requested action is okay - moved directories
           getcwd(curr_dir, 256);
-          printf("The current directory now is: %s\n", curr_dir);
           file_action_okay_response(new_socket_fd);
           free(file_path);
           continue;
@@ -238,7 +259,6 @@ int main(int argc, char *argv[]) {
 
         char curr_dir[256];
         getcwd(curr_dir, 256);
-        printf("The current directory is: %s\n", curr_dir);
         if (strcmp(curr_dir, root_dir) == 0) {
           // send error response if CDUP is called in the root directory
           requested_action_not_taken_response(new_socket_fd);
@@ -247,7 +267,6 @@ int main(int argc, char *argv[]) {
 
         if (chdir("..") == 0) {
           getcwd(curr_dir, 256);
-          printf("The current directory after is: %s\n", curr_dir);
           command_okay_response(new_socket_fd);
           continue;
         } else {
@@ -315,10 +334,13 @@ int main(int argc, char *argv[]) {
       }
       // PASV command
       else if (strcasecmp(command, "pasv") == 0) {
-        // TODO: generate IP address and port number for passive mode
-        // send '227 Entering Passive Mode (h1,h2,h3,h4,p1,p2).' response to the client
+        if (arg_count != 1) {
+          // PASV should be the only argument
+          syntax_error_args_response(new_socket_fd);
+          continue;
+        }
 
-        // the following code is from the server.c provided on piazza with slight modification
+        // the following code is from the server.c provided on piazza with slight modification 
         // source: https://piazza.com/class/jq71qu0b3sj2pu?cid=582
         struct addrinfo hints, *servinfo, *p;
         struct sockaddr_storage their_addr; // connector's address information
@@ -344,13 +366,16 @@ int main(int argc, char *argv[]) {
         // loop through all the results and bind to the first we can
         for (p = servinfo; p != NULL; p = p->ai_next) {
           // create socket object
-          if ((pasv_fd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1) {
+          if ((pasv_fd = socket(p->ai_family, p->ai_socktype,
+                                p->ai_protocol)) == -1) {
             perror("server: socket");
             continue;
           }
 
-          // specify that, once the program finishes, the port can be reused by other processes
-          if (setsockopt(pasv_fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int)) == -1) {
+          // specify that, once the program finishes, the port can be reused by
+          // other processes
+          if (setsockopt(pasv_fd, SOL_SOCKET, SO_REUSEADDR, &yes,
+                         sizeof(int)) == -1) {
             perror("setsockopt");
             exit(1);
           }
@@ -364,35 +389,37 @@ int main(int argc, char *argv[]) {
           // if code reaches this point, the socket was properly created
           break;
         }
-        
-        freeaddrinfo(servinfo);
 
-        // if p is null, the loop above could create a socket for any given address
+        freeaddrinfo(servinfo);
+        // if p is null, the loop above could create a socket for any given
+        // address
         if (p == NULL) {
-          fprintf(stderr, "server: failed to bind\n");
+          printf("failed to bind\n");
         }
 
         // setes up a queue of incoming connections to be received by the server
         if (listen(pasv_fd, 1) == -1) {
-          perror("listen");
+          printf("failed to listen listen\n");
           continue;
-        }
-
-        while(1) {
-          // wait for new client to connect
-          sin_size = sizeof(their_addr);
-          new_pasv_fd = accept(pasv_fd, (struct sockaddr *)&their_addr, &sin_size);
-          if (new_pasv_fd == -1) {
-            perror("accept");
-            continue;
-          } else {
-            printf("YASSSSSSS\n");
-          }
         }
 
         struct sockaddr_in pasv_addr;
         socklen_t pasv_addr_size = sizeof pasv_addr;
         getsockname(pasv_fd, (struct sockaddr *)&pasv_addr, &pasv_addr_size);
+
+        // convert to the correct byte order
+        int port = (int)ntohs(pasv_addr.sin_port);
+        printf("%s%d\n", "port: ", port);
+        int p1 = port / 256;
+        int p2 = port % 256;
+        printf("%s%d\n", "p1: ", p1);
+        printf("%s%d\n", "p2: ", p2);
+
+        char response_string[100];
+        sprintf(response_string, "227 Entering Passive Mode (%s%s%d%s%d%s", dup_ip_address, ",", p1, ",", p2, ")");
+        printf("testing again: %s\n", response_string);
+      
+        passive_mode = 1;
       }
       // NLST command
       else if (strcasecmp(command, "nlst") == 0) {
