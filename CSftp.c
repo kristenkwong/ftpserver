@@ -499,7 +499,6 @@ int main(int argc, char *argv[]) {
         int yes = 1;
         int rv;
 
-        printf("ENTERING PASV MODE\n");
         memset(&hints, 0, sizeof hints); // make sure the struct is empty
         hints.ai_family = AF_INET;       // IPv4 address
         hints.ai_socktype = SOCK_STREAM; // TCP stream sockets
@@ -560,8 +559,6 @@ int main(int argc, char *argv[]) {
         printf("%s%d\n", "port: ", pasv_port_num);
         int p1 = pasv_port_num / 256;
         int p2 = pasv_port_num % 256;
-        printf("%s%d\n", "p1: ", p1);
-        printf("%s%d\n", "p2: ", p2);
 
         char response_string[100];
         sprintf(response_string, "227 Entering Passive Mode (%s%s%d%s%d%s",
