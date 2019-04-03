@@ -426,15 +426,20 @@ int main(int argc, char *argv[]) {
 
             int read_bytes;
 
-            while (1) {
-              read_bytes = fread(buff, 1, 52, fp);
-              if (feof(fp)) // end of file
-                break;
+            int c;
+            while (fread(buff, sizeof(buff), 1, fp) == 1) {
+              read_bytes = fread(buff, 1, sizeof(buff), fp);
+              send_response(new_pasv_fd, 250);
               write(new_pasv_fd, buff, read_bytes);
             }
+            if (feof(fp))  { // end of file
+              printf("reached end of file \r\n");
+            } else {
+              printf("unknown error");
+            }
 
-            fclose(fp);
             send_response(new_socket_fd, 226);
+            fclose(fp);
 
           }
         }
