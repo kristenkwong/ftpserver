@@ -30,8 +30,14 @@ void send_response(int fd, int response_code) {
   case 220:
     response = "220 Service ready for new user.\r\n";
     break;
+  case 221:
+    response = "221 Service closing control connection.\r\n";
+    break;
   case 226:
     response = "226 Closing data connection.\r\n";
+    break;
+  case 230:
+    response = "230 User logged in, proceed.\r\n";
     break;
   case 250:
     response = "250 Requested file action okay, completed.\r\n";
@@ -71,75 +77,6 @@ void send_response(int fd, int response_code) {
   send(fd, response, strlen(response), 0);
 }
 
-void data_connection_already_open(int fd) {
-  send(fd, "125 Data connection already open; transfer starting.\r\n",
-       strlen("125 Data connection already open; transfer starting.\r\n"), 0);
-}
-
-void file_status_okay_response(int fd) {
-  send(fd, "150 File status okay; about to open data connection.\r\n",
-       strlen("150 File status okay; about to open data connection.\r\n"), 0);
-}
-
-void close_data_connection_response(int fd) {
-  send(fd, "226 Closing data connection.\r\n",
-       strlen("226 Closing data connection.\r\n"), 0);
-}
-
-void not_logged_in_response(int fd) {
-  send(fd, "530 Not logged in.\r\n", strlen("530 Not logged in.\r\n"), 0);
-}
-
-void syntax_error_response(int fd) {
-  send(fd, "500 Syntax error, command unrecognized.\r\n",
-       strlen("500 Syntax error, command unrecognized.\r\n"), 0);
-}
-
-void syntax_error_args_response(int fd) {
-  send(fd, "501 Syntax error in parameters or arguments.\r\n",
-       strlen("501 Syntax error in parameters or arguments.\r\n"), 0);
-}
-
-void command_okay_response(int fd) {
-  send(fd, "200 Command okay.\r\n", strlen("200 Command okay.\r\n"), 0);
-}
-
-void parameter_not_supported_response(int fd) {
-  send(fd, "504 Command not implemented for that parameter.\r\n",
-       strlen("504 Command not implemented for that parameter.\r\n"), 0);
-}
-
-void file_action_okay_response(int fd) {
-  send(fd, "250 Requested file action okay, completed.\r\n",
-       strlen("250 Requested file action okay, completed.\r\n"), 0);
-}
-
-void requested_action_not_taken_response(int fd) {
-  send(fd, "550 Requested action not taken.\r\n",
-       strlen("550 Requested action not taken.\r\n"), 0);
-}
-
-void cant_open_data_connection_response(int fd) {
-  send(fd, "425 Can't open data connection.\r\n",
-       strlen("425 Can't open data connection.\r\n"), 0);
-}
-
-void service_not_available_response(int fd) {
-  send(fd, "421 Service not available, closing control connection.\r\n",
-       strlen("421 Service not available, closing control connection.\r\n"), 0);
-}
-
-void requested_file_action_not_taken_response(int fd) {
-  send(fd, "450 Requested file action not taken.\r\n",
-       strlen("450 Requested file action not taken.\r\n"), 0);
-}
-
-void requested_action_aborted_response(int fd) {
-  send(fd, "451 Requested action aborted: local error in processing.\r\n",
-       strlen("451 Requested action aborted: local error in processing.\r\n"),
-       0);
-}
-
 // source:
 // https://stackoverflow.com/questions/26951184/using-a-replace-function-in-c-programming
 // function to replace periods with commas
@@ -157,7 +94,6 @@ int main(int argc, char *argv[]) {
   char root_dir[256];
   char *sock_ip_address;
   getcwd(root_dir, sizeof(root_dir));
-  printf("Root directory is: %s\n", root_dir);
   int port_num, socket_fd, new_socket_fd;
   int pasv_port_num, new_pasv_fd, pasv_fd; // passive sockets
   int op = 1;
@@ -221,15 +157,13 @@ int main(int argc, char *argv[]) {
   socklen_t sock_addr_size = sizeof sock_addr;
   getsockname(new_socket_fd, (struct sockaddr *)&sock_addr, &sock_addr_size);
   sock_ip_address = inet_ntoa(sock_addr.sin_addr);
-  printf("IPv4 Address: %s\n", sock_ip_address);
 
   // duplicate the IP address string, for use in PASV command
   char *dup_ip_address = strdup(sock_ip_address);
   replace_periods(dup_ip_address);
 
   // send welcome message to client
-  send(new_socket_fd, "220 Service ready for new user.\r\n",
-       strlen("220 Service ready for new user.\r\n"), 0);
+  send_response(new_socket_fd, 220);
   while (1) {
     // clears the buffer
     memset(buffer, '\0', 1024);
@@ -239,7 +173,7 @@ int main(int argc, char *argv[]) {
     } else if (data_len > 1024)
     // overflow detection
     {
-      syntax_error_response(new_socket_fd);
+      send_response(new_socket_fd, 500);
       continue;
     }
 
@@ -267,12 +201,11 @@ int main(int argc, char *argv[]) {
     // QUIT command
     if (strcasecmp(command, "quit") == 0) {
       if (arg_count != 1) {
-        syntax_error_args_response(new_socket_fd);
+        send_response(new_socket_fd, 501);
         continue;
       }
       logged_in = 0;
-      send(new_socket_fd, "221 Service closing control connection.\r\n",
-           strlen("221 Service closing control connection.\r\n"), 0);
+      send_response(new_socket_fd, 221);
       close(new_socket_fd);
       // TODO: NOT SURE IF I NEED TO RETURN A 0 HERE TO END THE PROGRAM
       return 0;
@@ -280,30 +213,28 @@ int main(int argc, char *argv[]) {
 
     if (logged_in == 0 && strcasecmp(command, "user") != 0) {
       // user is not logged in - send not logged in response
-      not_logged_in_response(new_socket_fd);
+      send_response(new_socket_fd, 530);
       continue;
     } else {
       // USER command
       if (strcasecmp(command, "user") == 0) {
         if (arg_count != 2) {
           // if there's only 'user' and no username argument
-          syntax_error_args_response(new_socket_fd);
+          send_response(new_socket_fd, 500);
           continue;
         }
         if (strcasecmp(first_arg, "cs317") == 0) {
-          printf("%s\n", "Login was successful. Setting logged_in = 1");
           logged_in = 1;
-          send(new_socket_fd, "230 User logged in, proceed.\r\n",
-               strlen("230 User logged in, proceed.\r\n"), 0);
+          send_response(new_socket_fd, 230);
         } else {
           // if any other username is entered
-          not_logged_in_response(new_socket_fd);
+          send_response(new_socket_fd, 530);
           continue;
         }
       } else if (strcasecmp(command, "cwd") == 0) {
         if (arg_count != 2) {
           // if there's no file path provided, send a syntax error response
-          syntax_error_args_response(new_socket_fd);
+          send_response(new_socket_fd, 501);
           continue;
         }
         char curr_dir[256];
@@ -318,7 +249,7 @@ int main(int argc, char *argv[]) {
         while (path_token != NULL) {
           // return 550 response if file path contains ./ or ../
           if (strcmp(path_token, ".") == 0 || strcmp(path_token, "..") == 0) {
-            requested_action_not_taken_response(new_socket_fd);
+            send_response(new_socket_fd, 550);
             goto next;
           }
           path_token = strtok(NULL, slash);
@@ -327,13 +258,13 @@ int main(int argc, char *argv[]) {
         if (chdir(file_path) == -1) {
           // requested action could not be taken (invalid file path, dir doesn't
           // exist)
-          requested_action_not_taken_response(new_socket_fd);
+          send_response(new_socket_fd, 550);
           free(file_path);
           continue;
         } else {
           // requested action is okay - moved directories
           getcwd(curr_dir, 256);
-          file_action_okay_response(new_socket_fd);
+          send_response(new_socket_fd, 250);
           free(file_path);
           continue;
         }
@@ -345,7 +276,7 @@ int main(int argc, char *argv[]) {
       else if (strcasecmp(command, "cdup") == 0) {
         if (arg_count != 1) {
           // cdup should have no arguments
-          syntax_error_args_response(new_socket_fd);
+          send_response(new_socket_fd, 501);
           continue;
         }
 
@@ -353,30 +284,30 @@ int main(int argc, char *argv[]) {
         getcwd(curr_dir, 256);
         if (strcmp(curr_dir, root_dir) == 0) {
           // send error response if CDUP is called in the root directory
-          requested_action_not_taken_response(new_socket_fd);
+          send_response(new_socket_fd, 550);
           continue;
         }
 
         if (chdir("..") == 0) {
           getcwd(curr_dir, 256);
-          command_okay_response(new_socket_fd);
+          send_response(new_socket_fd, 200);
           continue;
         } else {
-          requested_action_not_taken_response(new_socket_fd);
+          send_response(new_socket_fd, 550);
           continue;
         };
       } else if (strcasecmp(command, "type") == 0) {
         if (arg_count != 2) {
           // if there's only the 'type' argument
-          syntax_error_args_response(new_socket_fd);
+          send_response(new_socket_fd, 501);
           continue;
         }
         char type = toupper(*first_arg);
         if (type == 'A' || type == 'I') {
-          command_okay_response(new_socket_fd);
+          send_response(new_socket_fd, 200);
           continue;
         } else {
-          parameter_not_supported_response(new_socket_fd);
+          send_response(new_socket_fd, 504);
           continue;
         }
       }
@@ -385,17 +316,17 @@ int main(int argc, char *argv[]) {
       else if (strcasecmp(command, "mode") == 0) {
         if (arg_count != 2) {
           // if there's only the 'mode' argument
-          syntax_error_args_response(new_socket_fd);
+          send_response(new_socket_fd, 501);
           continue;
         }
         char mode = toupper(*first_arg);
         if (mode == 'S')
         // only stream mode needs to be supported
         {
-          command_okay_response(new_socket_fd);
+          send_response(new_socket_fd, 200);
           continue;
         } else {
-          parameter_not_supported_response(new_socket_fd);
+          send_response(new_socket_fd, 504);
           continue;
         }
       }
@@ -404,24 +335,23 @@ int main(int argc, char *argv[]) {
       else if (strcasecmp(command, "stru") == 0) {
         if (arg_count != 2) {
           // if there's only the 'stru' argument
-          syntax_error_args_response(new_socket_fd);
+          send_response(new_socket_fd, 501);
           continue;
         }
         char stru = toupper(*first_arg);
         if (stru == 'F')
         // only File structure type needs to be supported
         {
-          command_okay_response(new_socket_fd);
+          send_response(new_socket_fd, 200);
           continue;
         } else {
-          parameter_not_supported_response(new_socket_fd);
+          send_response(new_socket_fd, 504);
           continue;
         }
       }
 
       // RETR command
       else if (strcasecmp(command, "retr") == 0) {
-        // TODO: check args
         struct sockaddr_in client_addr;
 
         if (passive_mode == 0) {
@@ -430,26 +360,22 @@ int main(int argc, char *argv[]) {
         } else if (logged_in == 0) {
           send_response(new_socket_fd, 530);
         } else {
+          socklen_t sin_size;
+          sin_size = sizeof(client_addr);
 
           client_addr.sin_family = AF_INET;
           client_addr.sin_addr.s_addr = INADDR_ANY;
           client_addr.sin_port = htons(pasv_port_num);
 
-          new_pasv_fd = accept(pasv_fd, (struct sockaddr *)&client_addr,
-                               (socklen_t *)sizeof(client_addr));
+          new_pasv_fd =
+              accept(pasv_fd, (struct sockaddr *)&client_addr, &sin_size);
 
-          printf("%s\n", "accepted passive connection");
           int input_file;
           FILE *fp;
           long file_len;
 
           fp = fopen(first_arg, "rb"); // read file in bytes
           input_file = fileno(fp);     // convert to file descriptor
-
-          FILE *testfile;
-          testfile = fopen("testfile", "w+");
-          int testfd;
-          testfd = fileno(testfile);
 
           if (input_file < 0) { // no file found
             send_response(new_socket_fd, 550);
@@ -467,7 +393,7 @@ int main(int argc, char *argv[]) {
 
               void *p = buffer;
               while (bytes_read > 0) {
-                int bytes_written = write(testfd, p, bytes_read);
+                int bytes_written = write(new_pasv_fd, p, bytes_read);
                 if (bytes_written <= 0) {
                   send_response(new_socket_fd, 426);
                 }
@@ -485,7 +411,7 @@ int main(int argc, char *argv[]) {
       else if (strcasecmp(command, "pasv") == 0) {
         if (arg_count != 1) {
           // PASV should be the only argument
-          syntax_error_args_response(new_socket_fd);
+          send_response(new_socket_fd, 501);
           continue;
         }
 
@@ -506,7 +432,7 @@ int main(int argc, char *argv[]) {
 
         if ((rv = getaddrinfo(NULL, "0", &hints, &servinfo)) != 0) {
           // close connection if cannot get information for address
-          service_not_available_response(new_socket_fd);
+          send_response(new_socket_fd, 421);
           exit(1);
         }
 
@@ -553,7 +479,6 @@ int main(int argc, char *argv[]) {
         struct sockaddr_in pasv_addr;
         socklen_t pasv_addr_size = sizeof pasv_addr;
         getsockname(pasv_fd, (struct sockaddr *)&pasv_addr, &pasv_addr_size);
-        printf("listening on: %d\n", pasv_fd);
 
         // convert to the correct byte order
         pasv_port_num = (int)ntohs(pasv_addr.sin_port);
@@ -564,7 +489,6 @@ int main(int argc, char *argv[]) {
         char response_string[100];
         sprintf(response_string, "227 Entering Passive Mode (%s%s%d%s%d%s",
                 dup_ip_address, ",", p1, ",", p2, ")\r\n");
-        printf("testing again: %s\n", response_string);
         send(new_socket_fd, response_string, strlen(response_string), 0);
         passive_mode = 1;
       }
@@ -573,27 +497,26 @@ int main(int argc, char *argv[]) {
         struct sockaddr_storage client_addr;
 
         if (passive_mode == 0) {
-          cant_open_data_connection_response(new_socket_fd);
+          send_response(new_socket_fd, 425);
         } else if (logged_in == 0) {
-          not_logged_in_response(new_socket_fd);
+          send_response(new_socket_fd, 530);
         } else if (arg_count > 1) { // param given
-          syntax_error_args_response(new_socket_fd);
+          send_response(new_socket_fd, 501);
         } else {
           socklen_t sin_size;
           sin_size = sizeof(client_addr);
-          new_pasv_fd = accept(pasv_fd, (struct sockaddr *)&client_addr,
-                               &sin_size);
-          
-          printf("help: %d\n", new_pasv_fd);
+          new_pasv_fd =
+              accept(pasv_fd, (struct sockaddr *)&client_addr, &sin_size);
 
-          file_status_okay_response(new_socket_fd);
+          send_response(new_socket_fd, 150);
           int files = listFiles(new_pasv_fd, ".");
           if (files == -1) { // dir doesn't exist or no access
-            requested_file_action_not_taken_response(new_socket_fd);
+            send_response(new_socket_fd, 450);
           } else if (files == -2) { // insufficient resources
-            requested_action_aborted_response(new_socket_fd);
+            send_response(new_socket_fd, 451);
           } else {
-            close_data_connection_response(new_socket_fd);
+            send_response(new_socket_fd, 226);
+
             close(new_pasv_fd);
             close(pasv_fd);
 
@@ -604,16 +527,10 @@ int main(int argc, char *argv[]) {
 
       else {
         // command isn't one of the ones supported
-        syntax_error_response(new_socket_fd);
+        send_response(new_socket_fd, 500);
       }
       continue;
     }
   }
-
-  // This is how to call the function in dir.c to get a listing of a directory.
-  // It requires a file descriptor, so in your code you would pass in the file
-  // descriptor returned for the ftp server's data connection
-
-  // printf("Printed %d directory entries\n", listFiles(1, "."));
   return 0;
 }

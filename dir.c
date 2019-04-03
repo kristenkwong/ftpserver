@@ -50,11 +50,11 @@ int listFiles(int fd, char * directory) {
       // This call really should check the return value
       stat(dirEntry->d_name, &buf);
 
-	dprintf(fd, "F    %-20s     %lld\n", dirEntry->d_name, buf.st_size);
+	dprintf(fd, "F    %-20s     %lld\r\n", dirEntry->d_name, buf.st_size);
     } else if (dirEntry->d_type == DT_DIR) { // Directory
-      dprintf(fd, "D        %s\n", dirEntry->d_name);
+      dprintf(fd, "D        %s\r\n", dirEntry->d_name);
     } else {
-      dprintf(fd, "U        %s\n", dirEntry->d_name);
+      dprintf(fd, "U        %s\r\n", dirEntry->d_name);
     }
     entriesPrinted++;
   }
