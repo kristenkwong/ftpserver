@@ -47,7 +47,13 @@ void requested_action_not_taken_response(int fd) {
 }
 
 void cant_open_data_connection_response(int fd) {
-  send(fd, "425 Can't open data connection.\r\n", strlen("425 Can't open data connection.\r\n"), 0);
+  send(fd, "425 Can't open data connection.\r\n",
+       strlen("425 Can't open data connection.\r\n"), 0);
+}
+
+void service_not_available_response(int fd) {
+  send(fd, "421 Service not available, closing control connection.\r\n",
+       strlen("421 Service not available, closing control connection.\r\n"), 0);
 }
 
 int main(int argc, char *argv[]) {
@@ -188,7 +194,7 @@ int main(int argc, char *argv[]) {
           continue;
         }
         char curr_dir[256];
-        getcwd(curr_dir, 256); 
+        getcwd(curr_dir, 256);
         printf("The current directory is: %s\n", curr_dir);
 
         char *path_token;
@@ -207,19 +213,20 @@ int main(int argc, char *argv[]) {
         }
 
         if (chdir(file_path) == -1) {
-          // requested action could not be taken (invalid file path, dir doesn't exist)
+          // requested action could not be taken (invalid file path, dir doesn't
+          // exist)
           requested_action_not_taken_response(new_socket_fd);
           free(file_path);
           continue;
         } else {
           // requested action is okay - moved directories
-          getcwd(curr_dir, 256); 
+          getcwd(curr_dir, 256);
           printf("The current directory now is: %s\n", curr_dir);
           file_action_okay_response(new_socket_fd);
           free(file_path);
           continue;
         }
-        next:
+      next:
         continue;
       } else if (strcasecmp(command, "cdup") == 0) {
         // cdup command
@@ -230,16 +237,16 @@ int main(int argc, char *argv[]) {
         }
 
         char curr_dir[256];
-        getcwd(curr_dir, 256); 
+        getcwd(curr_dir, 256);
         printf("The current directory is: %s\n", curr_dir);
         if (strcmp(curr_dir, root_dir) == 0) {
           // send error response if CDUP is called in the root directory
           requested_action_not_taken_response(new_socket_fd);
           continue;
-        } 
+        }
 
         if (chdir("..") == 0) {
-          getcwd(curr_dir, 256); 
+          getcwd(curr_dir, 256);
           printf("The current directory after is: %s\n", curr_dir);
           command_okay_response(new_socket_fd);
           continue;
@@ -247,7 +254,6 @@ int main(int argc, char *argv[]) {
           requested_action_not_taken_response(new_socket_fd);
           continue;
         };
-
       } else if (strcasecmp(command, "type") == 0) {
         if (arg_count != 2) {
           // if there's only the 'type' argument
@@ -311,15 +317,82 @@ int main(int argc, char *argv[]) {
       else if (strcasecmp(command, "pasv") == 0) {
         // TODO: generate IP address and port number for passive mode
         // send '227 Entering Passive Mode (h1,h2,h3,h4,p1,p2).' response to the client
-        struct addrinfo hints, *res;
-        int sockfd;
 
+        // the following code is from the server.c provided on piazza with slight modification
+        // source: https://piazza.com/class/jq71qu0b3sj2pu?cid=582
+        struct addrinfo hints, *servinfo, *p;
+        struct sockaddr_storage their_addr; // connector's address information
+        socklen_t sin_size;
+        struct sigaction sa;
+
+        int pasv_fd, new_pasv_fd;
+        int yes = 1;
+        int rv;
+
+        printf("ENTERING PASV MODE\n");
         memset(&hints, 0, sizeof hints); // make sure the struct is empty
-        hints.ai_family = AF_INET; // IPv4 address
+        hints.ai_family = AF_INET;       // IPv4 address
         hints.ai_socktype = SOCK_STREAM; // TCP stream sockets
-        hints.ai_flags = AI_PASSIVE; // fills in IP for me
+        hints.ai_flags = AI_PASSIVE;     // fills in IP for me
 
+        if ((rv = getaddrinfo(NULL, "0", &hints, &servinfo)) != 0) {
+          // close connection if cannot get information for address
+          service_not_available_response(new_socket_fd);
+          exit(1);
+        }
+
+        // loop through all the results and bind to the first we can
+        for (p = servinfo; p != NULL; p = p->ai_next) {
+          // create socket object
+          if ((pasv_fd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1) {
+            perror("server: socket");
+            continue;
+          }
+
+          // specify that, once the program finishes, the port can be reused by other processes
+          if (setsockopt(pasv_fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int)) == -1) {
+            perror("setsockopt");
+            exit(1);
+          }
+
+          // bind to the specified port number
+          if (bind(pasv_fd, p->ai_addr, p->ai_addrlen) == -1) {
+            close(pasv_fd);
+            perror("server: bind");
+            continue;
+          }
+          // if code reaches this point, the socket was properly created
+          break;
+        }
         
+        freeaddrinfo(servinfo);
+
+        // if p is null, the loop above could create a socket for any given address
+        if (p == NULL) {
+          fprintf(stderr, "server: failed to bind\n");
+        }
+
+        // setes up a queue of incoming connections to be received by the server
+        if (listen(pasv_fd, 1) == -1) {
+          perror("listen");
+          continue;
+        }
+
+        while(1) {
+          // wait for new client to connect
+          sin_size = sizeof(their_addr);
+          new_pasv_fd = accept(pasv_fd, (struct sockaddr *)&their_addr, &sin_size);
+          if (new_pasv_fd == -1) {
+            perror("accept");
+            continue;
+          } else {
+            printf("YASSSSSSS\n");
+          }
+        }
+
+        struct sockaddr_in pasv_addr;
+        socklen_t pasv_addr_size = sizeof pasv_addr;
+        getsockname(pasv_fd, (struct sockaddr *)&pasv_addr, &pasv_addr_size);
       }
       // NLST command
       else if (strcasecmp(command, "nlst") == 0) {
