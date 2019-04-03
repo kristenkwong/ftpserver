@@ -416,6 +416,7 @@ int main(int argc, char *argv[]) {
 
       // RETR command
       else if (strcasecmp(command, "retr") == 0) {
+        // TODO: check args
         struct sockaddr_in client_addr;
 
         if (passive_mode == 0) {
@@ -546,6 +547,7 @@ int main(int argc, char *argv[]) {
         }
 
         struct sockaddr_in pasv_addr;
+        pasv_addr.sin_port = 0;
         socklen_t pasv_addr_size = sizeof pasv_addr;
         getsockname(pasv_fd, (struct sockaddr *)&pasv_addr, &pasv_addr_size);
 
@@ -566,7 +568,6 @@ int main(int argc, char *argv[]) {
       }
       // NLST command
       else if (strcasecmp(command, "nlst") == 0) {
-
         struct sockaddr_storage client_addr;
 
         if (passive_mode == 0) {
@@ -576,7 +577,7 @@ int main(int argc, char *argv[]) {
         } else if (arg_count > 1) { // param given
           syntax_error_args_response(new_socket_fd);
         } else {
-          new_pasv_fd = accept(socket_fd, (struct sockaddr *)&client_addr,
+          new_pasv_fd = accept(pasv_fd, (struct sockaddr *)&client_addr,
                                (socklen_t *)sizeof(client_addr));
 
           file_status_okay_response(new_socket_fd);
