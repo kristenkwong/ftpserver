@@ -584,7 +584,7 @@ int main(int argc, char *argv[]) {
 
           char curr_dir[256];
           int files;
-          files = listFiles(new_pasv_fd, getcwd(curr_dir, 256));
+          files = listFiles(new_pasv_fd, ".");
           if (files == -1) { // dir doesn't exist or no access
             requested_file_action_not_taken_response(new_socket_fd);
           } else if (files == -2) { // insufficient resources
