@@ -416,9 +416,9 @@ int main(int argc, char *argv[]) {
         printf("%s%d\n", "p2: ", p2);
 
         char response_string[100];
-        sprintf(response_string, "227 Entering Passive Mode (%s%s%d%s%d%s", dup_ip_address, ",", p1, ",", p2, ")");
+        sprintf(response_string, "227 Entering Passive Mode (%s%s%d%s%d%s", dup_ip_address, ",", p1, ",", p2, ")\r\n");
         printf("testing again: %s\n", response_string);
-      
+        send(new_socket_fd, response_string, strlen(response_string), 0);
         passive_mode = 1;
       }
       // NLST command
