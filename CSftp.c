@@ -10,6 +10,7 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <fcntl.h>
 
 // Here is an example of how to use the above function. It also shows
 // one how to get the arguments passed on the command line.
@@ -415,33 +416,32 @@ int main(int argc, char *argv[]) {
           new_pasv_fd = accept(pasv_fd, (struct sockaddr *) &client_addr, (socklen_t *) sizeof(client_addr));
           
           printf("%s\n", "accepted passive connection");
-          FILE *fp = NULL;
+          FILE *fp;
+          long file_len;
+
           fp = fopen(first_arg, "rb"); // read file in bytes
-          char buff[256];
+
+          fseek(fp, 0, SEEK_END);
+          file_len = ftell(fp);
+          printf("file length: %ld\n", file_len);
+          rewind(fp);
 
           if (fp == NULL) {
             send_response(new_socket_fd, 550);
           } else {
             send_response(new_socket_fd, 125);
 
-            int read_bytes;
-
-            int c;
-            while (fread(buff, sizeof(buff), 1, fp) == 1) {
-              read_bytes = fread(buff, 1, sizeof(buff), fp);
-              send_response(new_pasv_fd, 250);
-              write(new_pasv_fd, buff, read_bytes);
+            char buff;
+            for (int i = 0; i <= file_len; i++) {
+              fread(&buff, 1, 1, fp);
+              printf("%02X ", buff);
+              write(new_pasv_fd, &buff, 1);
             }
-            if (feof(fp))  { // end of file
-              printf("reached end of file \r\n");
-            } else {
-              printf("unknown error");
-            }
-
             send_response(new_socket_fd, 226);
-            fclose(fp);
 
           }
+          close(new_pasv_fd);
+          fclose(fp);
         }
         
         
