@@ -18,46 +18,49 @@ void send_response(int fd, int response_code) {
   char* response;
   switch(response_code) {
     case 125:
-      response = "125 Data connection already open; transfer starting.";
+      response = "125 Data connection already open; transfer starting.\r\n";
       break;
     case 150:
-      response = "150 File status okay; about to open data connection.";
+      response = "150 File status okay; about to open data connection.\r\n";
       break;
     case 200:
-      response = "200 Command okay.";
+      response = "200 Command okay.\r\n";
+      break;
+    case 220:
+      response = "220 Service ready for new user.\r\n";
       break;
     case 226:
-      response = "226 Closing data connection.";
+      response = "226 Closing data connection.\r\n";
       break;
     case 250:
-      response = "250 Requested file action okay, completed.";
+      response = "250 Requested file action okay, completed.\r\n";
       break;
     case 421:
-      response = "421 Service not available, closing control connection.";
+      response = "421 Service not available, closing control connection.\r\n";
       break;
     case 425:
-      response = "425 Can't open data connection.";
+      response = "425 Can't open data connection.\r\n";
       break;
     case 450:
-      response = "450 Requested file action not taken.";
+      response = "450 Requested file action not taken.\r\n";
       break;
     case 451:
-      response = "451 Requested action aborted: local error in processing.";
+      response = "451 Requested action aborted: local error in processing.\r\n";
       break;
     case 500:
-      response = "500 Syntax error, command unrecognized.";
+      response = "500 Syntax error, command unrecognized.\r\n";
       break;
     case 501:
-      response = "501 Syntax error in parameters or arguments.";
+      response = "501 Syntax error in parameters or arguments.\r\n";
       break;
     case 504:
-      response = "504 Command not implemented for that parameter.";
+      response = "504 Command not implemented for that parameter.\r\n";
       break;
     case 530:
-      response = "530 Not logged in.";
+      response = "530 Not logged in.\r\n";
       break;
     case 550:
-      response = "550 Requested action not taken.";
+      response = "550 Requested action not taken.\r\n";
       break;
   }
 
@@ -404,33 +407,34 @@ int main(int argc, char *argv[]) {
       else if (strcasecmp(command, "retr") == 0) {
         struct sockaddr_storage client_addr;
         if (passive_mode == 0) {
-          cant_open_data_connection_response(new_socket_fd);
+          send_response(new_socket_fd, 425);
           continue;
         } else if (logged_in == 0) {
-          not_logged_in_response(new_socket_fd);
+          send_response(new_socket_fd, 530);
         } else {
-          new_pasv_fd = accept(socket_fd, (struct sockaddr *) &client_addr, (socklen_t *) sizeof(client_addr));
+          new_pasv_fd = accept(pasv_fd, (struct sockaddr *) &client_addr, (socklen_t *) sizeof(client_addr));
           
+          printf("%s\n", "accepted passive connection");
           FILE *fp = NULL;
           fp = fopen(first_arg, "rb"); // read file in bytes
           char buff[256];
 
           if (fp == NULL) {
-            requested_action_not_taken_response(new_pasv_fd);
+            send_response(new_socket_fd, 550);
           } else {
-            data_connection_already_open(new_pasv_fd);
+            send_response(new_socket_fd, 125);
 
             int read_bytes;
 
             while (1) {
-              read_bytes = fread(buff, 1, 12, fp);
+              read_bytes = fread(buff, 1, 52, fp);
               if (feof(fp)) // end of file
                 break;
               write(new_pasv_fd, buff, read_bytes);
             }
 
             fclose(fp);
-            close_data_connection_response(new_pasv_fd);
+            send_response(new_socket_fd, 226);
 
           }
         }
@@ -451,7 +455,6 @@ int main(int argc, char *argv[]) {
         struct sockaddr_storage their_addr; // connector's address information
         socklen_t sin_size;
 
-        int pasv_fd, new_pasv_fd;
         int yes = 1;
         int rv;
 
