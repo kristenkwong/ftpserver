@@ -425,31 +425,42 @@ int main(int argc, char *argv[]) {
           new_pasv_fd = accept(pasv_fd, (struct sockaddr *) &client_addr, (socklen_t *) sizeof(client_addr));
           
           printf("%s\n", "accepted passive connection");
+          int input_file;
           FILE *fp;
           long file_len;
 
           fp = fopen(first_arg, "rb"); // read file in bytes
+          input_file = fileno(fp); // convert to file descriptor
 
-          fseek(fp, 0, SEEK_END);
-          file_len = ftell(fp);
-          printf("file length: %ld\n", file_len);
-          rewind(fp);
-
-          char buff[1024];
-
-          if (fp == NULL) {
+          FILE *testfile;
+          testfile = fopen("testfile", "w+");
+          int testfd;
+          testfd = fileno(testfile);
+          
+          if (input_file < 0) { // no file found
             send_response(new_socket_fd, 550);
           } else {
             send_response(new_socket_fd, 125);
 
-            while (fread(buff, sizeof(char), 1024, fp)) {
-              if (send(new_pasv_fd, buff, strlen(buff), 0) < 0) {
-                printf("sending error");
-                close(new_pasv_fd);
+            while (1) {
+              int bytes_read = read(input_file, buffer, sizeof(buffer));
+              if (bytes_read == 0)
+                break; // reached EOF
+              else if (bytes_read < 0) {
                 send_response(new_socket_fd, 426);
-                break;
+                break; // TODO HANDLE ERROR
               }
-              printf("%2s ", buff);
+
+              void *p = buffer;
+              while (bytes_read > 0) {
+                int bytes_written = write(testfd, p, bytes_read);
+                if (bytes_written <= 0) {
+                  send_response(new_socket_fd, 426);
+                }
+                bytes_read -= bytes_written;
+                p += bytes_written;
+              }
+              
             }
             send_response(new_socket_fd, 226);
 
