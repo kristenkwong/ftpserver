@@ -160,6 +160,7 @@ int main(int argc, char *argv[]) {
   printf("Root directory is: %s\n", root_dir);
   int port_num, socket_fd, new_socket_fd;
   int pasv_port_num, new_pasv_fd, pasv_fd; // passive sockets
+  int op = 1;
 
   // user isn't logged in initially
   int logged_in = 0;
@@ -187,6 +188,11 @@ int main(int argc, char *argv[]) {
   if (socket_fd == -1) {
     printf("Socket creation failed.\n");
     return -1;
+  }
+
+  if (setsockopt(socket_fd, SOL_SOCKET, SO_REUSEADDR, &op, sizeof(int)) == -1) {
+    perror("setsockopt");
+    exit(1);
   }
 
   address.sin_family = AF_INET;
@@ -302,7 +308,6 @@ int main(int argc, char *argv[]) {
         }
         char curr_dir[256];
         getcwd(curr_dir, 256);
-        printf("The current directory is: %s\n", curr_dir);
 
         char *path_token;
         char *file_path;
@@ -547,7 +552,6 @@ int main(int argc, char *argv[]) {
         }
 
         struct sockaddr_in pasv_addr;
-        pasv_addr.sin_port = 0;
         socklen_t pasv_addr_size = sizeof pasv_addr;
         getsockname(pasv_fd, (struct sockaddr *)&pasv_addr, &pasv_addr_size);
 
@@ -581,10 +585,7 @@ int main(int argc, char *argv[]) {
                                (socklen_t *)sizeof(client_addr));
 
           file_status_okay_response(new_socket_fd);
-
-          char curr_dir[256];
-          int files;
-          files = listFiles(new_pasv_fd, ".");
+          int files = listFiles(new_pasv_fd, ".");
           if (files == -1) { // dir doesn't exist or no access
             requested_file_action_not_taken_response(new_socket_fd);
           } else if (files == -2) { // insufficient resources
@@ -593,6 +594,7 @@ int main(int argc, char *argv[]) {
             close_data_connection_response(new_socket_fd);
             close(new_pasv_fd);
             close(pasv_fd);
+
             passive_mode = 0;
           }
         }
