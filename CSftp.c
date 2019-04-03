@@ -13,6 +13,68 @@
 // Here is an example of how to use the above function. It also shows
 // one how to get the arguments passed on the command line.
 
+void send_response(int fd, int response_code) {
+  char* response;
+  switch(response_code) {
+    case 125:
+      response = "125 Data connection already open; transfer starting.";
+      break;
+    case 150:
+      response = "150 File status okay; about to open data connection.";
+      break;
+    case 200:
+      response = "200 Command okay.";
+      break;
+    case 226:
+      response = "226 Closing data connection.";
+      break;
+    case 250:
+      response = "250 Requested file action okay, completed.";
+      break;
+    case 421:
+      response = "421 Service not available, closing control connection.";
+      break;
+    case 425:
+      response = "425 Can't open data connection.";
+      break;
+    case 450:
+      response = "450 Requested file action not taken.";
+      break;
+    case 451:
+      response = "451 Requested action aborted: local error in processing.";
+      break;
+    case 500:
+      response = "500 Syntax error, command unrecognized.";
+      break;
+    case 501:
+      response = "501 Syntax error in parameters or arguments.";
+      break;
+    case 504:
+      response = "504 Command not implemented for that parameter.";
+      break;
+    case 530:
+      response = "530 Not logged in.";
+      break;
+    case 550:
+      response = "550 Requested action not taken.";
+      break;
+  }
+
+  send(fd, response, strlen(response), 0);
+}
+
+void data_connection_already_open(int fd) {
+  send(fd, "125 Data connection already open; transfer starting.\r\n", strlen("125 Data connection already open; transfer starting.\r\n"), 0);
+}
+
+void file_status_okay_response(int fd) {
+  send(fd, "150 File status okay; about to open data connection.\r\n", strlen("150 File status okay; about to open data connection.\r\n"), 0);
+}
+
+void close_data_connection_response(int fd) {
+  send(fd, "226 Closing data connection.\r\n", strlen("226 Closing data connection.\r\n"), 0);
+}
+
 void not_logged_in_response(int fd) {
   send(fd, "530 Not logged in.\r\n", strlen("530 Not logged in.\r\n"), 0);
 }
@@ -56,6 +118,14 @@ void service_not_available_response(int fd) {
        strlen("421 Service not available, closing control connection.\r\n"), 0);
 }
 
+void requested_file_action_not_taken_response(int fd) {
+  send(fd, "450 Requested file action not taken.\r\n", strlen("450 Requested file action not taken.\r\n"), 0);
+}
+
+void requested_action_aborted_response (int fd) {
+  send(fd, "451 Requested action aborted: local error in processing.\r\n", strlen("451 Requested action aborted: local error in processing.\r\n"), 0);
+}
+
 int main(int argc, char *argv[]) {
   struct sockaddr_in address;
   // store the root directory
@@ -63,6 +133,7 @@ int main(int argc, char *argv[]) {
   getcwd(root_dir, sizeof(root_dir));
   printf("Root directory is: %s\n", root_dir);
   int port_num, socket_fd, new_socket_fd;
+  int pasv_port_num, new_pasv_fd, pasv_fd; // passive sockets
 
   // user isn't logged in initially
   int logged_in = 0;
@@ -228,8 +299,10 @@ int main(int argc, char *argv[]) {
         }
       next:
         continue;
-      } else if (strcasecmp(command, "cdup") == 0) {
-        // cdup command
+      } 
+      
+      // CDUP COMMAND
+      else if (strcasecmp(command, "cdup") == 0) {
         if (arg_count != 1) {
           // cdup should have no arguments
           syntax_error_args_response(new_socket_fd);
@@ -269,6 +342,7 @@ int main(int argc, char *argv[]) {
           continue;
         }
       }
+
       // MODE command
       else if (strcasecmp(command, "mode") == 0) {
         if (arg_count != 2) {
@@ -287,6 +361,7 @@ int main(int argc, char *argv[]) {
           continue;
         }
       }
+
       // STRU command
       else if (strcasecmp(command, "stru") == 0) {
         if (arg_count != 2) {
@@ -305,13 +380,43 @@ int main(int argc, char *argv[]) {
           continue;
         }
       }
+
       // RETR command
       else if (strcasecmp(command, "retr") == 0) {
+        struct sockaddr_storage client_addr;
         if (passive_mode == 0) {
           cant_open_data_connection_response(new_socket_fd);
           continue;
+        } else if (logged_in == 0) {
+          not_logged_in_response(new_socket_fd);
+        } else {
+          new_pasv_fd = accept(socket_fd, (struct sockaddr *) &client_addr, (socklen_t *) sizeof(client_addr));
+          
+          FILE *fp = NULL;
+          fp = fopen(first_arg, "rb"); // read file in bytes
+          char buff[256];
+
+          if (fp == NULL) {
+            requested_action_not_taken_response(new_pasv_fd);
+          } else {
+            data_connection_already_open(new_pasv_fd);
+
+            int read_bytes;
+
+            while (1) {
+              read_bytes = fread(buff, 1, 12, fp);
+              if (feof(fp)) // end of file
+                break;
+              write(new_pasv_fd, buff, read_bytes);
+            }
+
+            fclose(fp);
+            close_data_connection_response(new_pasv_fd);
+
+          }
         }
-        // TODO: complete
+        
+        
       }
       // PASV command
       else if (strcasecmp(command, "pasv") == 0) {
@@ -396,12 +501,38 @@ int main(int argc, char *argv[]) {
       }
       // NLST command
       else if (strcasecmp(command, "nlst") == 0) {
+
+        struct sockaddr_storage client_addr;
+
         if (passive_mode == 0) {
           cant_open_data_connection_response(new_socket_fd);
-          continue;
+        } else if (logged_in == 0) {
+          not_logged_in_response(new_socket_fd);
+        } else if (arg_count > 1) { // param given
+          syntax_error_args_response(new_socket_fd); 
+        } else {
+          new_pasv_fd = accept(socket_fd, (struct sockaddr *) &client_addr, (socklen_t *) sizeof(client_addr));
+
+          file_status_okay_response(new_socket_fd);
+
+          char curr_dir[256];
+          int files;
+          files = listFiles(new_pasv_fd, getcwd(curr_dir, 256));
+          if (files == -1) { // dir doesn't exist or no access
+            requested_file_action_not_taken_response(new_socket_fd);
+          } else if (files == -2) { // insufficient resources
+            requested_action_aborted_response(new_socket_fd);
+          } else {
+            close_data_connection_response(new_socket_fd);
+            close(new_pasv_fd);
+            close(pasv_fd);
+            passive_mode = 0;
+
+          }
         }
-        // TODO: complete
-      } else {
+      } 
+      
+      else {
         // command isn't one of the ones supported
         syntax_error_response(new_socket_fd);
       }
