@@ -42,6 +42,9 @@ void send_response(int fd, int response_code) {
     case 425:
       response = "425 Can't open data connection.\r\n";
       break;
+    case 426:
+      response = "426 Connection closed; transfer aborted.\r\n";
+      break;
     case 450:
       response = "450 Requested file action not taken.\r\n";
       break;
@@ -406,13 +409,19 @@ int main(int argc, char *argv[]) {
 
       // RETR command
       else if (strcasecmp(command, "retr") == 0) {
-        struct sockaddr_storage client_addr;
+        struct sockaddr_in client_addr;
+        
         if (passive_mode == 0) {
           send_response(new_socket_fd, 425);
           continue;
         } else if (logged_in == 0) {
           send_response(new_socket_fd, 530);
         } else {
+
+          client_addr.sin_family = AF_INET;
+          client_addr.sin_addr.s_addr = INADDR_ANY;
+          client_addr.sin_port = htons(pasv_port_num);
+
           new_pasv_fd = accept(pasv_fd, (struct sockaddr *) &client_addr, (socklen_t *) sizeof(client_addr));
           
           printf("%s\n", "accepted passive connection");
@@ -426,16 +435,21 @@ int main(int argc, char *argv[]) {
           printf("file length: %ld\n", file_len);
           rewind(fp);
 
+          char buff[1024];
+
           if (fp == NULL) {
             send_response(new_socket_fd, 550);
           } else {
             send_response(new_socket_fd, 125);
 
-            char buff;
-            for (int i = 0; i <= file_len; i++) {
-              fread(&buff, 1, 1, fp);
-              printf("%02X ", buff);
-              write(new_pasv_fd, &buff, 1);
+            while (fread(buff, sizeof(char), 1024, fp)) {
+              if (send(new_pasv_fd, buff, strlen(buff), 0) < 0) {
+                printf("sending error");
+                close(new_pasv_fd);
+                send_response(new_socket_fd, 426);
+                break;
+              }
+              printf("%2s ", buff);
             }
             send_response(new_socket_fd, 226);
 
