@@ -450,7 +450,6 @@ int main(int argc, char *argv[]) {
         struct addrinfo hints, *servinfo, *p;
         struct sockaddr_storage their_addr; // connector's address information
         socklen_t sin_size;
-        struct sigaction sa;
 
         int pasv_fd, new_pasv_fd;
         int yes = 1;
