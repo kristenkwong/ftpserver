@@ -12,9 +12,6 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-// Here is an example of how to use the above function. It also shows
-// one how to get the arguments passed on the command line.
-
 void send_response(int fd, int response_code) {
   char *response;
   switch (response_code) {
@@ -385,10 +382,10 @@ int main(int argc, char *argv[]) {
             while (1) {
               int bytes_read = read(input_file, buffer, sizeof(buffer));
               if (bytes_read == 0)
-                break; // reached EOF
+                break;
               else if (bytes_read < 0) {
                 send_response(new_socket_fd, 426);
-                break; // TODO HANDLE ERROR
+                break;
               }
 
               void *p = buffer;
@@ -482,7 +479,6 @@ int main(int argc, char *argv[]) {
 
         // convert to the correct byte order
         pasv_port_num = (int)ntohs(pasv_addr.sin_port);
-        printf("%s%d\n", "port: ", pasv_port_num);
         int p1 = pasv_port_num / 256;
         int p2 = pasv_port_num % 256;
 
@@ -500,7 +496,8 @@ int main(int argc, char *argv[]) {
           send_response(new_socket_fd, 425);
         } else if (logged_in == 0) {
           send_response(new_socket_fd, 530);
-        } else if (arg_count > 1) { // param given
+        } else if (arg_count > 1) {
+          // check parameters given
           send_response(new_socket_fd, 501);
         } else {
           socklen_t sin_size;
@@ -520,13 +517,14 @@ int main(int argc, char *argv[]) {
             close(new_pasv_fd);
             close(pasv_fd);
 
+            // turn off passive mode
             passive_mode = 0;
           }
         }
       }
 
       else {
-        // command isn't one of the ones supported
+        // if the command isn't one of the ones supported, return a 500 response
         send_response(new_socket_fd, 500);
       }
       continue;
